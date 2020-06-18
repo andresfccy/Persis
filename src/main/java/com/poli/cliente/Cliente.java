@@ -13,7 +13,22 @@ public class Cliente {
 	/**
 	 * Puerto de conexión del servidor correspondiente
 	 */
-	public final static int PUERTO_SERVIDOR = Server.PUERTO_SERVIDOR;
+	private final static int PUERTO_SERVIDOR = Server.PUERTO_SERVIDOR;
+	
+	/**
+	 * Variable en la que se inicializará el socket de conexión con el servidor
+	 */
+	private Socket s;
+	
+	/**
+	 * Variable que se usa para leer todo mensaje recibido del servidor
+	 */
+	private DataInputStream read;
+	
+	/**
+	 * Variable que se usa para escribir los mensajes al servidor
+	 */
+	private DataOutputStream write;
 	
 	/**
 	 * Constructor de la clase actual.
@@ -75,10 +90,52 @@ public class Cliente {
 	}
 	
 	/**
-	 * Método que gestiona la opción de configuraciones
+	 * Método que gestiona la opción de configuraciones, CRUD de entidades y configuración inicial del sistema
 	 */
 	private void configuraciones() {
-		
+		try {
+			String opt = "";
+			s = new Socket("localhost", this.PUERTO_SERVIDOR);
+			// Variables de lectura y escritura
+			read = new DataInputStream(s.getInputStream()); 
+	        write = new DataOutputStream(s.getOutputStream());
+	        
+			while(opt != null && !opt.equalsIgnoreCase("0")) {
+				opt = JOptionPane.showInputDialog(null, ""
+						+ "Selecciona una opción\n"
+						+ "1. Simular un cliente con saldo.\n"
+						+ "0. Atrás");
+				if( opt == null ) opt = "";
+				
+				switch(opt) {
+					case "1":
+						write.writeUTF("102:simular cliente");
+						String res = read.readUTF(); // Esperar a que el servidor responda
+						if(res.split(":")[0].equalsIgnoreCase("200"))
+							JOptionPane.showMessageDialog(null, "Simulación correcta!");
+						else if(res.split(":")[0].equalsIgnoreCase("500")) {
+							JOptionPane.showMessageDialog(null, "Ocurrió un error");
+							System.out.println(res.split(":")[1]);
+						}
+						break;
+					case "0":
+						write.writeUTF("0:Say Bye");
+						read.readUTF(); // Esperar a que el servidor responda
+						break;
+					default:
+						opt = "";
+						JOptionPane.showMessageDialog(null, "Opción no válida");
+						break;
+				}
+			}
+			
+			read.close();
+			write.close();
+			s.close();
+		}
+		catch(IOException ex) {
+			ex.printStackTrace();
+		}
 	}
 	
 	/**
@@ -99,9 +156,6 @@ public class Cliente {
 	 * Método de prueba para gestionar una conexión infinita con el servidor a menos de que se reciba un comando de salida
 	 */
 	private void sayHello() {
-		Socket s;
-		DataInputStream read;
-		DataOutputStream write;
 		try {
 			String opt = "";
 			s = new Socket("localhost", this.PUERTO_SERVIDOR);
@@ -114,6 +168,8 @@ public class Cliente {
 						+ "Selecciona una opción\n"
 						+ "1. Saludar.\n"
 						+ "0. Atrás");
+				if( opt == null ) opt = "";
+				
 				switch(opt) {
 					case "1":
 						write.writeUTF("101:Say Hello");
