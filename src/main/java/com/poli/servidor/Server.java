@@ -91,6 +91,7 @@ public class Server {
 		                		break;
 		                }
 	                }
+	                req = "";
 	                read.close();
 	                write.close();
 	                s.close();
@@ -102,6 +103,7 @@ public class Server {
 			}
 		}
 		catch(IOException ex) {
+			
 			JOptionPane.showMessageDialog(
 					null, 
 					"Error: " + ex.getMessage(), 

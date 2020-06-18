@@ -25,7 +25,7 @@ public class Cliente {
 			// Variable que modela la opción seleccionada por el usuario en el menú principal.
 			String selOpt = "";
             
-			while(!selOpt.equalsIgnoreCase("0")) {
+			while(selOpt != null && !selOpt.equalsIgnoreCase("0")) {
 				// Se utilizan JOptionPane para simular una interfaz sencilla.
 				selOpt = JOptionPane.showInputDialog(null, ""
 						+ "Bienvenido a la aplicación de BANCO XYZ.\n"
@@ -37,7 +37,7 @@ public class Cliente {
 						+ "0. Salir.");
 				
 				// Confirmación de salida
-				if(selOpt.equalsIgnoreCase("0")) { 
+				if(selOpt == null || selOpt.equalsIgnoreCase("0")) { 
 					if( 0 != JOptionPane.showConfirmDialog(null, "¿Está seguro que desea salir del programa?"))
 						selOpt = "";
 				} 
@@ -65,6 +65,7 @@ public class Cliente {
 			JOptionPane.showMessageDialog(null, "¡Hasta pronto!");
 		}
 		catch(Exception ex) {
+			ex.printStackTrace();
 			JOptionPane.showMessageDialog(
 					null, 
 					"Error: " + ex.getMessage(), 
@@ -94,6 +95,9 @@ public class Cliente {
 		
 	}
 	
+	/**
+	 * Método de prueba para gestionar una conexión infinita con el servidor a menos de que se reciba un comando de salida
+	 */
 	private void sayHello() {
 		Socket s;
 		DataInputStream read;
@@ -105,7 +109,7 @@ public class Cliente {
 			read = new DataInputStream(s.getInputStream()); 
 	        write = new DataOutputStream(s.getOutputStream());
 	        
-			while(!opt.equalsIgnoreCase("0")) {
+			while(opt != null && !opt.equalsIgnoreCase("0")) {
 				opt = JOptionPane.showInputDialog(null, ""
 						+ "Selecciona una opción\n"
 						+ "1. Saludar.\n"
@@ -131,7 +135,7 @@ public class Cliente {
 			s.close();
 		}
 		catch(IOException ex) {
-			System.out.println("ERROR:\n"+ex.getMessage());
+			ex.printStackTrace();
 		}
 	}
 	
