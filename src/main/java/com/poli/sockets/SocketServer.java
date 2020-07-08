@@ -1,4 +1,4 @@
-package main.java.com.poli.servidor;
+package main.java.com.poli.sockets;
 
 import java.net.*;
 import java.io.*;
@@ -8,9 +8,10 @@ import java.util.*;
 
 import javax.swing.JOptionPane;
 
+import main.java.com.poli.entidades.ClienteBanco;
 import oracle.jdbc.pool.OracleDataSource;
 
-public class Server {
+public class SocketServer {
 	/**
 	 * Puerto que se utilizará para abrir el socket servidor
 	 */
@@ -40,18 +41,30 @@ public class Server {
 			+ "VALUES (?, ?, ?, ?, ?)";
 	
 	/**
-	 * Query de la selección estandar de el último valor insertado en una tabla
-	 * Se define la interpolación de datos para el nombre de la secuencia de la tabla
-	 */
-	private final static String queryGetLastUserId = "select clientes_pk.currval from dual";
-	
-	/**
 	 * Query de inserción estandar de una cuenta, dado el id del usuario dueño
 	 * Se define una interpolación para el id del cliente
 	 */	
 	private final static String queryAccountInsert = ""
     		+ "INSERT INTO CUENTAS (CLIENTE_ID) "
     		+ "VALUES (?)";
+	
+	/**
+	 * Query de inserción estandar de una cuenta, dado el id del usuario dueño
+	 * Se define una interpolación para el id del cliente
+	 */	
+	private final static String queryBalanceInsert = ""
+    		+ "INSERT INTO SALDOS (CUENTA_ID) "
+    		+ "VALUES (?)";
+	
+	/**
+	 * Query de la selección estandar de el último valor insertado en la tabla de clientes
+	 */
+	private final static String queryGetLastUserId = "select clientes_pk.currval from dual";
+	
+	/**
+	 * Query de la selección estandar de el último valor insertado en la tabla de cuentas
+	 */
+	private final static String queryGetLastAccountId = "select cuentas_pk.currval from dual";
 	
 	/**
 	 * Variable que modela la conexión con la base de datos
@@ -61,7 +74,7 @@ public class Server {
 	/**
 	 * Constructor de la clase servidor
 	 */
-	public Server () {
+	public SocketServer () {
 		realizarConexionBD();
 		
 		abrirConexion();
@@ -106,6 +119,21 @@ public class Server {
 		                	case "102": // 102 Es el código para simular un usuario y su cuenta
 		                		simularCreacionUsuario(read, write);
 		                		break;
+		                	case "103": // 103 Es el código consultar los usuarios registrados en el sistema
+		                		consultarUsuarios(read, write, Integer.parseInt(req.split(":")[1]));
+		                		break;
+		                	case "104": // 104 Es el código consultar el saldo de un usuario
+		                		consultarSaldoUsuario(read, write, Integer.parseInt(req.split(":")[1]));
+		                		break;
+		                	case "105": // 105 Realizar retiro cuenta
+		                		retirarSaldoCuenta(read, write);
+		                		break;
+		                	case "106": // 106 Crear cuenta a un cliente
+		                		crearCuentaCliente(read, write, Integer.parseInt(req.split(":")[1]), Double.parseDouble(req.split(":")[2]));
+		                		break;
+		                	case "107": // 107 Agregar saldo a una cuenta de un cliente
+		                		retirarSaldoCuenta(read, write);
+		                		break;
 		                	case "0": // 0 Es una despedida del cliente
 		                		write.writeUTF("200:bye");
 		                		req = "exit";
@@ -137,7 +165,198 @@ public class Server {
 					JOptionPane.ERROR_MESSAGE);
 		}
 	}
+
+	private void retirarSaldoCuenta(DataInputStream read, DataOutputStream write) throws IOException, SQLException {
+		// TODO Auto-generated method stub
+		
+	}
 	
+	/**
+	 * Método que crea una cuenta nueva de un cliente con un saldo inicial, si el saldo inicial.
+	 * @param read
+	 * @param write
+	 * @param id_usuario
+	 * @param saldoCreacion
+	 * @throws IOException
+	 * @throws SQLException
+	 */
+	private void crearCuentaCliente(DataInputStream read, DataOutputStream write, int id_usuario, double saldoCreacion) throws IOException, SQLException {
+		ResultSet rs;
+		
+		PreparedStatement insertAccount = null;
+		PreparedStatement selectLastIdAccount = null;
+		PreparedStatement insertBalance = null;
+		try {
+			// Se establece que no se realice commit automáticamente
+			conn.setAutoCommit(false);
+			
+			// Se prepara el primer query que se va a realizar, con la inserción de una cuenta
+			insertAccount = conn.prepareStatement(queryAccountInsert, Statement.RETURN_GENERATED_KEYS);
+			insertAccount.setInt(1, id_usuario); 				// Primer parámetro de la interpolación, es el id del cliente al que se le quiere asociar la cuenta
+			// Se ejecuta la inserción
+			insertAccount.execute();
+			
+			// Se obtiene el id de la cuenta insertado, mediante un select a la secuencia que define los ids en la tabla cuentas
+			selectLastIdAccount = conn.prepareStatement(queryGetLastAccountId);
+			// Se guarda en un resultset, el resultado del select
+			rs = selectLastIdAccount.executeQuery();
+			
+			String idCuentaInsertada = "";
+			// Si el resultset no está vacío, es decir, sí se insertó la cuenta
+			if (rs.next()) {
+				// Asigna el id de la cuenta insertada a una variable de tipo int
+				idCuentaInsertada = rs.getString(1);
+			    // Se prepara el query de inserción de un saldo a la cuenta insertada previamente
+			    insertBalance = conn.prepareStatement(queryBalanceInsert);
+			    insertBalance.setString(1, idCuentaInsertada); // Primer parámetro de la interpolación, es el id de la cuenta, previamente insertada
+			    insertBalance.execute();
+			}
+			conn.commit();	
+			escribirLog("Id de la cuenta creada, número de cuenta: " + idCuentaInsertada);
+    		write.writeUTF("200:Creación de cuenta correcta.;" + idCuentaInsertada);
+		}
+		catch(SQLException ex) {
+			ex.printStackTrace();
+			System.out.println("----------------------");
+			if (conn != null) {
+	            try {
+	                System.err.print("Transaction is being rolled back");
+	                conn.rollback();
+	            } catch(SQLException excep) {
+	                excep.printStackTrace();
+	                System.out.println("----------------------");
+	            }
+	        }
+	        
+	        write.writeUTF("500:Ocurrió un error\n" + ex.getMessage());
+	    } finally {
+	        if (insertAccount != null) {
+	            insertAccount.close();
+	        }
+	        if (selectLastIdAccount != null) {
+	        	selectLastIdAccount.close();
+	        }
+	        if (insertBalance != null) {
+	        	insertBalance.close();
+	        }
+	        conn.setAutoCommit(true);
+	    }
+	}
+
+	/**
+	 * Método que consulta el saldo de un usuario.
+	 * @param read - Variable que modela la comunicación actual de escritura con el socket cliente que realizó la solicitud
+	 * @param write - Variable que modela la comunicación actual del lectura con el socket cliente que realizó la solicitud
+	 * @param id_usuario - Id en la base de datos del cliente del que se va a consultar la información
+	 * @throws IOException
+	 * @throws SQLException
+	 */
+	private void consultarSaldoUsuario(DataInputStream read, DataOutputStream write, long id_usuario) throws IOException, SQLException {
+		ResultSet rs;
+		String response = "";
+		PreparedStatement selectBalance = null;
+		try {
+			selectBalance = conn.prepareStatement(""
+					+ "select NVL(c.id,0) numero_cuenta, NVL(s.saldo,0) saldo " 
+					+ "from clientes cl " 
+					+ "left join cuentas c on c.cliente_id = cl.id "
+					+ "left join saldos s on c.id = s.cuenta_id "
+					+ "where cl.id = ?");
+			selectBalance.setLong(1, id_usuario);
+			
+			rs = selectBalance.executeQuery();
+			while (rs.next()) {
+				escribirLog("Numero cuenta: " + rs.getLong(1) + " Saldo:" + rs.getDouble(2));
+				if(rs.getLong(1) != 0)
+					response += rs.getLong(1) + ";" + rs.getDouble(2) + "$";
+				else
+					response += "Este cliente no tiene una cuenta creada.";
+			}
+			
+			if (response != null && response.length() > 0 && response.charAt(response.length() - 1) == '$') response = response.substring(0, response.length() - 1);
+			
+			escribirLog("Mensaje a enviar: " + response);
+    		write.writeUTF("200:" + response);
+		}
+		catch(SQLException ex) {
+			ex.printStackTrace();
+			System.out.println("----------------------");
+			if (conn != null) {
+	            try {
+	                System.err.print("Transaction is being rolled back");
+	                conn.rollback();
+	            } catch(SQLException excep) {
+	                excep.printStackTrace();
+	                System.out.println("----------------------");
+	            }
+	        }
+	        
+	        write.writeUTF("500:Ocurrió un error\n" + ex.getMessage());
+	    } finally {
+	        if (selectBalance != null) {
+	        	selectBalance.close();
+	        }
+	    }
+	}
+
+	/**
+	 * Método que consulta los clientes del banco registrados hasta el momento
+	 * @param read - Variable que modela la comunicación actual de escritura con el socket cliente que realizó la solicitud
+	 * @param write - Variable que modela la comunicación actual del lectura con el socket cliente que realizó la solicitud
+	 * @param pagina - Página actual en la que se quieren consultar los clientes
+	 * @throws SQLException
+	 * @throws IOException
+	 */
+	private void consultarUsuarios(DataInputStream read, DataOutputStream write, int pagina) throws SQLException, IOException {
+		ResultSet rs;
+		ClienteBanco cli = null;
+		int inicio = 1;
+		int cant = 11;
+		PreparedStatement selectBankClients = conn.prepareStatement(""
+				+ "select * "
+				+ "from ( "
+					+ "select c.*, CONCAT(CONCAT(ci.nombre,', '), p.nombre) ubicacion, rownum r "
+					+ "from clientes c "
+					+ "join ciudades ci on c.ciudad_id = ci.id "
+					+ "join paises p on ci.pais_id = p.id) "
+				+ "where r >= ? and r < ?");
+		selectBankClients.setInt(1, inicio * pagina);
+		selectBankClients.setInt(2, inicio * pagina + cant);
+		String response = "";
+		try {
+			rs = selectBankClients.executeQuery();
+			while (rs.next()) {
+				cli = new ClienteBanco(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5), rs.getString(7));
+				escribirLog("Cliente consultado: " + cli.toString());
+				response += cli.toStringForSend() + "$";
+			}
+			
+			if (response != null && response.length() > 0 && response.charAt(response.length() - 1) == '$') response = response.substring(0, response.length() - 1);
+			
+			escribirLog("Mensaje a enviar: " + response);
+    		write.writeUTF("200:" + response);
+		}
+		catch(SQLException ex) {
+			ex.printStackTrace();
+			System.out.println("----------------------");
+			if (conn != null) {
+	            try {
+	                System.err.print("Transaction is being rolled back");
+	                conn.rollback();
+	            } catch(SQLException excep) {
+	                excep.printStackTrace();
+	                System.out.println("----------------------");
+	            }
+	        }
+	        
+	        write.writeUTF("500:Ocurrió un error\n" + ex.getMessage());
+	    } finally {
+	        if (selectBankClients != null) {
+	        	selectBankClients.close();
+	        }
+	    }
+	}
+
 	/**
 	 * Método que realiza los accesos correspondientes a la BD para simular un usuario aleatorio de una ciudad aleatoria
 	 * y le crea una cuenta asociada a dicho usuario, se realiza una transacción con la creación del usuario y su asociación a una cuenta nueva.
@@ -203,7 +422,7 @@ public class Server {
 			}
 			conn.commit();	
 			escribirLog("Id de usuario insertado: " + idUsuarioInsertado);
-    		write.writeUTF("200:Simulación de usuario y cuenta correctos");
+    		write.writeUTF("200:Simulación de usuario y cuenta correctos;" + idUsuarioInsertado);
     		return Long.parseLong(idUsuarioInsertado);
 		}
 		catch(SQLException ex) {
@@ -266,6 +485,6 @@ public class Server {
 	 * @param args
 	 */
 	public static void main(String[] args) {
-		new Server();
+		new SocketServer();
 	}
 }
