@@ -53,8 +53,8 @@ public class SocketServer {
 	 * Se define una interpolación para el id del cliente
 	 */	
 	private final static String queryBalanceInsert = ""
-    		+ "INSERT INTO SALDOS (CUENTA_ID) "
-    		+ "VALUES (?)";
+    		+ "INSERT INTO SALDOS (CUENTA_ID, SALDO) "
+    		+ "VALUES (?,?)";
 	
 	/**
 	 * Query de la selección estandar de el último valor insertado en la tabla de clientes
@@ -208,7 +208,8 @@ public class SocketServer {
 				idCuentaInsertada = rs.getString(1);
 			    // Se prepara el query de inserción de un saldo a la cuenta insertada previamente
 			    insertBalance = conn.prepareStatement(queryBalanceInsert);
-			    insertBalance.setString(1, idCuentaInsertada); // Primer parámetro de la interpolación, es el id de la cuenta, previamente insertada
+			    insertBalance.setString(1, idCuentaInsertada); 	// Primer parámetro de la interpolación, es el id de la cuenta, previamente insertada
+			    insertBalance.setDouble(2, saldoCreacion); 		// Segundo parámetro de la interpolación, es el saldo con el que se crea la cuenta
 			    insertBalance.execute();
 			}
 			conn.commit();	

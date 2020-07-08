@@ -105,7 +105,7 @@ public class SocketCliente {
 				opt = JOptionPane.showInputDialog(null, ""
 						+ "Selecciona una opción\n"
 						+ "1. Simular un cliente con saldo.\n"
-						+ "2. Crear una cuenta a un cliente"
+						+ "2. Crear una cuenta a un cliente.\n"
 						+ "0. Atrás");
 				if( opt == null ) opt = "";
 				
@@ -127,10 +127,6 @@ public class SocketCliente {
 						String selOpt = "";
 						String opts = "";
 						int paginaActual = 1;
-						s = new Socket("localhost", this.PUERTO_SERVIDOR);
-						// Variables de lectura y escritura
-						read = new DataInputStream(s.getInputStream()); 
-				        write = new DataOutputStream(s.getOutputStream());
 				        
 				        write.writeUTF("103:" + paginaActual); // Consultar clientes del banco página 1
 						String res2 = read.readUTF(); // Esperar a que el servidor responda
@@ -300,12 +296,12 @@ public class SocketCliente {
 							res = read.readUTF(); // Esperar a que el servidor responda
 							if(res.split(":")[0].equalsIgnoreCase("200")) {
 								String saldosResponseString =  res.split(":")[1];
-								String[] listaSaldosResponseString = saldosResponseString.split("$");
+								String[] listaSaldosResponseString = saldosResponseString.split("\\$");
 								String saldosResponse = "";
 								String tmp[];
 								for (int i = 0; i < listaSaldosResponseString.length; i++) { 
 									tmp = listaSaldosResponseString[i].split(";");
-									saldosResponse += tmp.length > 1 ? ("# de cuenta: " + tmp[0] + "\nSaldo: " + tmp[1]) : tmp[0];
+									saldosResponse += tmp.length > 1 ? ("# de cuenta: " + tmp[0] + "\nSaldo: " + tmp[1] + "\n") : tmp[0];
 								}
 								JOptionPane.showMessageDialog(null, "Operación exitosa: \n"
 										+ saldosResponse);
