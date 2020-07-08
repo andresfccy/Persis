@@ -126,13 +126,13 @@ public class SocketServer {
 		                		consultarSaldoUsuario(read, write, Integer.parseInt(req.split(":")[1]));
 		                		break;
 		                	case "105": // 105 Realizar retiro cuenta
-		                		retirarSaldoCuenta(read, write);
+		                		retirarSaldoCuenta(read, write, Integer.parseInt(req.split(":")[1]), Double.parseDouble(req.split(":")[2]));
 		                		break;
 		                	case "106": // 106 Crear cuenta a un cliente
 		                		crearCuentaCliente(read, write, Integer.parseInt(req.split(":")[1]), Double.parseDouble(req.split(":")[2]));
 		                		break;
 		                	case "107": // 107 Agregar saldo a una cuenta de un cliente
-		                		retirarSaldoCuenta(read, write);
+		                		agregarSaldoCuenta(read, write, Integer.parseInt(req.split(":")[1]), Double.parseDouble(req.split(":")[2]));
 		                		break;
 		                	case "0": // 0 Es una despedida del cliente
 		                		write.writeUTF("200:bye");
@@ -166,9 +166,147 @@ public class SocketServer {
 		}
 	}
 
-	private void retirarSaldoCuenta(DataInputStream read, DataOutputStream write) throws IOException, SQLException {
-		// TODO Auto-generated method stub
+	/**
+	 * Método que permite agregar saldo a una cuenta existente
+	 * @param read
+	 * @param write
+	 * @param parseInt
+	 * @param parseDouble
+	 * @throws IOException
+	 * @throws SQLException
+	 */
+	private void agregarSaldoCuenta(DataInputStream read, DataOutputStream write, int id_cuenta, double saldoConsignar) throws IOException, SQLException {
+		ResultSet rs;
 		
+		PreparedStatement selectBalance = null;
+		PreparedStatement updateBalance = null;
+		try {			
+			// Se prepara el primer query que se va a realizar, con la actualización del saldo
+			selectBalance = conn.prepareStatement(""
+					+ "select s.saldo "
+					+ "from  saldos s "
+					+ "where s.cuenta_id = ?");
+			selectBalance.setInt(1, id_cuenta); 				// Primer parámetro de la interpolación, es el id la cuenta a consultar
+			// Se ejecuta la consulta
+			rs = selectBalance.executeQuery();
+			double saldoActual = 0;
+			if (rs.next()) {
+				// Se obtiene el saldo actual
+				saldoActual = rs.getDouble(1);
+			    // Se prepara el query de actualización del saldo
+				updateBalance = conn.prepareStatement("update saldos set saldo = ? where cuenta_id = ?");
+			    updateBalance.setDouble(1, (saldoActual + saldoConsignar));	// primer parámetro de la interpolación, es el saldo final después de la consignación
+			    updateBalance.setInt(2, id_cuenta); 						// segundo parámetro de la interpolación, es el id de la cuenta a la que pertenece el saldo
+			    updateBalance.execute();
+			}
+			else {
+				// Se prepara el query de creación del saldo
+				updateBalance = conn.prepareStatement("insert into saldos(saldo, cuenta_id) values(?,?");
+			    updateBalance.setDouble(1, (saldoConsignar));	// primer parámetro de la interpolación, es el saldo final después de la consignación
+			    updateBalance.setInt(2, id_cuenta); 			// segundo parámetro de la interpolación, es el id de la cuenta a la que pertenece el saldo
+			    updateBalance.execute();
+			}
+			
+			escribirLog("Consignación exitosa, saldo final: " + (saldoActual + saldoConsignar));
+    		write.writeUTF("200:Consignación exitosa;" + (saldoActual + saldoConsignar));
+		}
+		catch(SQLException ex) {
+			ex.printStackTrace();
+			System.out.println("----------------------");
+			if (conn != null) {
+	            try {
+	                System.err.print("Transaction is being rolled back");
+	                conn.rollback();
+	            } catch(SQLException excep) {
+	                excep.printStackTrace();
+	                System.out.println("----------------------");
+	            }
+	        }
+	        
+	        write.writeUTF("500:Ocurrió un error\n" + ex.getMessage());
+	    } finally {
+	        if (selectBalance != null) {
+	        	selectBalance.close();
+	        }
+	        if (updateBalance != null) {
+	        	updateBalance.close();
+	        }
+	        conn.setAutoCommit(true);
+	    }
+	}
+
+	/**
+	 * Método que permite retirar un saldo de una cuenta existente.
+	 * @param read
+	 * @param write
+	 * @param id_usuario
+	 * @param saldoRetiro
+	 * @throws IOException
+	 * @throws SQLException
+	 */
+	private void retirarSaldoCuenta(DataInputStream read, DataOutputStream write, int id_cuenta, double saldoRetiro) throws IOException, SQLException {
+		ResultSet rs;
+		
+		PreparedStatement selectBalance = null;
+		PreparedStatement updateBalance = null;
+		try {			
+			// Se prepara el primer query que se va a realizar, con la actualización del saldo
+			selectBalance = conn.prepareStatement(""
+					+ "select s.saldo "
+					+ "from  saldos s "
+					+ "where s.cuenta_id = ?");
+			selectBalance.setInt(1, id_cuenta); 				// Primer parámetro de la interpolación, es el id la cuenta a consultar
+			// Se ejecuta la consulta
+			rs = selectBalance.executeQuery();
+			double saldoActual = 0;
+			if (rs.next()) {
+				// Se obtiene el saldo actual
+				saldoActual = rs.getDouble(1);
+				if(saldoActual < saldoRetiro) {
+					escribirLog("No hay suficiente saldo para realizar un retiro.\n"
+							+ "Saldo actual: " + saldoActual);
+		    		write.writeUTF("500:Saldo insuficiente;" + saldoActual);
+				} 
+				else {
+				    // Se prepara el query de actualización del saldo
+					updateBalance = conn.prepareStatement("update saldos set saldo = ? where cuenta_id = ?");
+				    updateBalance.setDouble(1, (saldoActual - saldoRetiro));	// primer parámetro de la interpolación, es el saldo final después del retiro
+				    updateBalance.setInt(2, id_cuenta); 						// segundo parámetro de la interpolación, es el id de la cuenta a la que pertenece el saldo
+				    updateBalance.execute();
+
+					escribirLog("Retiro exitoso, saldo final: " + (saldoActual - saldoRetiro));
+		    		write.writeUTF("200:Retiro exitoso;" + (saldoActual - saldoRetiro));
+				}
+			}
+			else {
+				escribirLog("No hay suficiente saldo para realizar un retiro.\n"
+						+ "Saldo actual: " + saldoActual);
+	    		write.writeUTF("500:Saldo insuficiente;" + saldoActual);
+			}
+		}
+		catch(SQLException ex) {
+			ex.printStackTrace();
+			System.out.println("----------------------");
+			if (conn != null) {
+	            try {
+	                System.err.print("Transaction is being rolled back");
+	                conn.rollback();
+	            } catch(SQLException excep) {
+	                excep.printStackTrace();
+	                System.out.println("----------------------");
+	            }
+	        }
+	        
+	        write.writeUTF("500:Ocurrió un error\n" + ex.getMessage());
+	    } finally {
+	        if (selectBalance != null) {
+	        	selectBalance.close();
+	        }
+	        if (updateBalance != null) {
+	        	updateBalance.close();
+	        }
+	        conn.setAutoCommit(true);
+	    }
 	}
 	
 	/**
